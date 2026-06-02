@@ -3,7 +3,13 @@ import { supabase } from "../lib/supabase";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Register() {
-  const [form, setForm] = useState({ nama: "", email: "", password: "", role: "warga" });
+  const [form, setForm] = useState({
+    nama: "",
+    email: "",
+    password: "",
+    alamat: "",
+    role: "warga",
+  });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
@@ -22,10 +28,12 @@ export default function Register() {
   const strength = getPasswordStrength(form.password);
 
   const handleRegister = async () => {
-    if (!form.nama || !form.email || !form.password) {
+    if (!form.nama || !form.email || !form.password || !form.alamat) {
       return alert("Harap isi semua kolom.");
     }
+
     setLoading(true);
+
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
@@ -36,13 +44,37 @@ export default function Register() {
       return alert(error.message);
     }
 
+    // Simpan ke tabel profiles
     const { error: pError } = await supabase.from("profiles").insert([
-      { id: data.user.id, nama: form.nama, role: form.role },
+      {
+        id: data.user.id,
+        nama: form.nama,
+        role: form.role,
+      },
     ]);
 
-    setLoading(false);
-    if (pError) return alert("Gagal simpan profil: " + pError.message);
+    if (pError) {
+      setLoading(false);
+      return alert("Gagal simpan profil: " + pError.message);
+    }
 
+    // Jika role warga → simpan ke tabel warga
+    if (form.role === "warga") {
+      const { error: wargaError } = await supabase.from("warga").insert([
+        {
+          user_id: data.user.id,
+          nama: form.nama,
+          alamat: form.alamat,
+        },
+      ]);
+
+      if (wargaError) {
+        setLoading(false);
+        return alert("Gagal simpan data warga: " + wargaError.message);
+      }
+    }
+
+    setLoading(false);
     alert("Berhasil! Silakan login.");
     navigate("/login");
   };
@@ -170,6 +202,20 @@ export default function Register() {
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Alamat */}
+          <div style={styles.field}>
+            <label style={styles.label}>Alamat</label>
+            <input
+              type="text"
+              placeholder="Masukkan alamat lengkap"
+              value={form.alamat}
+              onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+              style={styles.input}
+              onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
+              onBlur={(e) => Object.assign(e.target.style, styles.input)}
+            />
           </div>
 
           {/* Role */}
