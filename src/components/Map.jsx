@@ -2,11 +2,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useState } from "react";
-
-// Import untuk Search Control (Geocoder)
-import "leaflet-control-geocoder/dist/Control.Geocoder.css";
-import "leaflet-control-geocoder";
+import { useEffect, useState, useRef } from "react";
 
 // Fix icon default Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -81,64 +77,137 @@ function MapEvents({ setLatLng, center }) {
   return null;
 }
 
-// Komponen untuk menambahkan kontrol pencarian lokasi (Geocoder) dengan fallback
+// Komponen Search Lokasi Custom (tanpa leaflet-control-geocoder agar tidak ada bug URL)
 function SearchControl() {
   const map = useMap();
-  const [geocoderError, setGeocoderError] = useState(false);
+  const controlRef = useRef(null);
 
   useEffect(() => {
-    let geocoder;
-    try {
-      const geocoderOptions = {
-        defaultMarkGeocode: true,
-        position: "topright",
-        placeholder: "Cari lokasi (kota, jalan, tempat)...",
-        errorMessage: "Lokasi tidak ditemukan atau CORS error",
-        suggestMinLength: 3,
-        limit: 8,
-      };
+    // Buat custom Leaflet control
+    const SearchBox = L.Control.extend({
+      onAdd() {
+        const wrapper = L.DomUtil.create("div", "custom-geocoder-wrap");
 
-      // Gunakan proxy lokal jika di development
-      if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-        geocoderOptions.url = "/nominatim/search?format=json&q={s}";
-      } else {
-        // Untuk production, gunakan Nominatim dengan parameter yang sesuai
-        geocoderOptions.serviceUrl = "https://nominatim.openstreetmap.org/search";
-        geocoderOptions.geocoder = L.Control.Geocoder.nominatim({
-          serviceUrl: "https://nominatim.openstreetmap.org/search",
-          geocodingQueryParams: {
-            "accept-language": "id",
-            countrycodes: "id",
-          },
-          headers: {
-            "User-Agent": "WebGIS-Sampah-App/1.0",
-          },
+        // Style wrapper
+        wrapper.style.cssText = `
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+          padding: 6px 10px;
+          display: flex;
+          flex-direction: column;
+          min-width: 260px;
+          font-family: sans-serif;
+        `;
+
+        // Input
+        const input = L.DomUtil.create("input", "", wrapper);
+        input.type = "text";
+        input.placeholder = "Cari lokasi...";
+        input.style.cssText = `
+          border: none;
+          outline: none;
+          font-size: 13px;
+          width: 100%;
+          padding: 2px 0;
+          color: #333;
+          background: transparent;
+        `;
+
+        // Dropdown hasil
+        const dropdown = L.DomUtil.create("div", "", wrapper);
+        dropdown.style.cssText = `
+          display: none;
+          flex-direction: column;
+          margin-top: 6px;
+          border-top: 1px solid #eee;
+          padding-top: 4px;
+          max-height: 200px;
+          overflow-y: auto;
+        `;
+
+        // Cegah klik pada control propagasi ke peta
+        L.DomEvent.disableClickPropagation(wrapper);
+        L.DomEvent.disableScrollPropagation(wrapper);
+
+        let debounceTimer = null;
+
+        input.addEventListener("input", () => {
+          const q = input.value.trim();
+          dropdown.innerHTML = "";
+          dropdown.style.display = "none";
+
+          if (q.length < 3) return;
+
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(async () => {
+            try {
+              const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&accept-language=id&countrycodes=id`;
+              const res = await fetch(url, {
+                headers: { "Accept-Language": "id" },
+              });
+              const data = await res.json();
+
+              dropdown.innerHTML = "";
+
+              if (!Array.isArray(data) || data.length === 0) {
+                const noResult = L.DomUtil.create("div", "", dropdown);
+                noResult.textContent = "Lokasi tidak ditemukan";
+                noResult.style.cssText = "padding: 4px 0; font-size: 12px; color: #999;";
+                dropdown.style.display = "flex";
+                return;
+              }
+
+              data.forEach((item) => {
+                const row = L.DomUtil.create("div", "", dropdown);
+                row.textContent = item.display_name;
+                row.style.cssText = `
+                  padding: 5px 2px;
+                  font-size: 12px;
+                  color: #333;
+                  cursor: pointer;
+                  border-bottom: 1px solid #f0f0f0;
+                  line-height: 1.4;
+                `;
+                row.addEventListener("mouseenter", () => (row.style.background = "#f5f5f5"));
+                row.addEventListener("mouseleave", () => (row.style.background = "transparent"));
+                row.addEventListener("click", () => {
+                  const lat = parseFloat(item.lat);
+                  const lng = parseFloat(item.lon);
+                  map.setView([lat, lng], 15);
+                  L.marker([lat, lng])
+                    .addTo(map)
+                    .bindPopup(item.display_name)
+                    .openPopup();
+                  input.value = item.display_name;
+                  dropdown.style.display = "none";
+                });
+                dropdown.style.display = "flex";
+              });
+            } catch (err) {
+              console.warn("Geocoder error:", err);
+            }
+          }, 400);
         });
-      }
 
-      geocoder = L.Control.geocoder(geocoderOptions).addTo(map);
+        // Tutup dropdown kalau klik di luar
+        document.addEventListener("click", (e) => {
+          if (!wrapper.contains(e.target)) {
+            dropdown.style.display = "none";
+          }
+        });
 
-      geocoder.on("error", (err) => {
-        console.warn("Geocoder error:", err);
-        setGeocoderError(true);
-        const container = document.querySelector(".leaflet-control-geocoder-form");
-        if (container) {
-          const errorMsg = document.createElement("div");
-          errorMsg.textContent = "CORS error: Gunakan proxy atau API key";
-          errorMsg.style.color = "red";
-          errorMsg.style.fontSize = "12px";
-          errorMsg.style.padding = "2px 5px";
-          container.appendChild(errorMsg);
-          setTimeout(() => errorMsg.remove(), 3000);
-        }
-      });
-    } catch (err) {
-      console.error("Failed to initialize geocoder:", err);
-      setGeocoderError(true);
-    }
+        return wrapper;
+      },
+      onRemove() {},
+    });
+
+    const control = new SearchBox({ position: "topright" });
+    control.addTo(map);
+    controlRef.current = control;
 
     return () => {
-      if (geocoder && map) map.removeControl(geocoder);
+      if (controlRef.current) map.removeControl(controlRef.current);
     };
   }, [map]);
 

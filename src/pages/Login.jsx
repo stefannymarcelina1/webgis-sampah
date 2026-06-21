@@ -289,7 +289,9 @@ const styles = {
   tab: {
     background: "none",
     border: "none",
-    borderBottom: "2px solid transparent",
+    borderBottomWidth: "2px",
+    borderBottomStyle: "solid",
+    borderBottomColor: "transparent",
     marginBottom: -0.5,
     padding: "0 0 14px",
     marginRight: 28,
