@@ -90,7 +90,10 @@ export default function AdminDashboard() {
       supabase.from("warga").select("*").order("created_at", { ascending: false }),
       supabase.from("pembayaran").select("*, warga(nama, alamat)").order("created_at", { ascending: false }),
       supabase.from("sampah").select("*, warga(nama, alamat)").order("created_at", { ascending: false }),
-      supabase.from("pengangkutan").select("*, warga(nama, alamat)").order("id", { ascending: false }),
+      supabase
+        .from("pengangkutan")
+        .select("*, warga(nama, alamat, location), transporter:profiles!pengangkutan_transporter_id_fkey(id, nama, role)")
+        .order("id", { ascending: false }),
     ]);
     setWarga(w.data || []);
     setPembayaran(p.data || []);
@@ -466,6 +469,8 @@ export default function AdminDashboard() {
                             <th style={S.th}>No</th>
                             <th style={S.th}>Nama Warga</th>
                             <th style={S.th}>Alamat</th>
+                            <th style={S.th}>Transporter</th>
+                            <th style={S.th}>Lokasi</th>
                             <th style={S.th}>Status</th>
                             <th style={S.th}>Tanggal</th>
                           </tr>
@@ -476,6 +481,12 @@ export default function AdminDashboard() {
                               <td style={{ ...S.td, color: "#aaa", width: 36 }}>{i + 1}</td>
                               <td style={{ ...S.td, fontWeight: 500 }}>{pg.warga?.nama || "-"}</td>
                               <td style={{ ...S.td, color: "#666" }}>{pg.warga?.alamat || "-"}</td>
+                              <td style={{ ...S.td, fontSize: 12 }}>
+                                {pg.transporter?.nama || pg.transporter_id || "-"}
+                              </td>
+                              <td style={{ ...S.td, fontSize: 12, color: "#555" }}>
+                                {pg.warga?.location ? "Sudah ada lokasi" : "Belum ada lokasi"}
+                              </td>
                               <td style={S.td}>
                                 <Badge status={
                                   pg.status === "selesai" ? "Selesai"

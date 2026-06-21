@@ -130,7 +130,7 @@ export default function WargaDashboard() {
       warga_id: profile.id,
       jenis: catatan ? `${jenis} (${catatan})` : jenis,
       berat: parseFloat(berat),
-      status: "Menunggu",
+      status_pengangkutan: "Menunggu",
     });
     if (error) alert("Gagal mengirim request: " + error.message);
     else {
@@ -144,11 +144,11 @@ export default function WargaDashboard() {
 
   async function bayarIuran() {
     if (!profile) return;
-    const adaPending = pembayaranList.some(p => p.status === "Pending");
+    const adaPending = pembayaranList.some(p => p.status_verifikasi === "Pending");
     if (adaPending) return alert("Masih ada pembayaran yang menunggu verifikasi admin.");
     const { error } = await supabase.from("pembayaran").insert({
       warga_id: profile.id,
-      status: "Pending",
+      status_verifikasi: "Pending",
     });
     if (error) alert("Gagal: " + error.message);
     else { alert("✅ Pembayaran diajukan, menunggu verifikasi admin."); await fetchPembayaran(profile.id); }
@@ -158,10 +158,10 @@ export default function WargaDashboard() {
 
   /* Statistik */
   const totalReq   = sampahList.length;
-  const menunggu   = sampahList.filter(s => s.status === "Menunggu").length;
-  const diproses   = sampahList.filter(s => s.status === "Diproses").length;
-  const selesai    = sampahList.filter(s => s.status === "Selesai").length;
-  const statusBayar = pembayaranList.find(p => p.status !== "Ditolak");
+  const menunggu   = sampahList.filter(s => s.status_pengangkutan === "Menunggu").length;
+  const diproses   = sampahList.filter(s => s.status_pengangkutan === "Diproses").length;
+  const selesai    = sampahList.filter(s => s.status_pengangkutan === "Selesai").length;
+  const statusBayar = pembayaranList.find(p => p.status_verifikasi && p.status_verifikasi !== "Ditolak");
 
   const TABS = [
     { key: "beranda",   label: "🏠 Beranda" },
@@ -227,12 +227,12 @@ export default function WargaDashboard() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
-              background: statusBayar?.status === "Disetujui" ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
-              border: `1px solid ${statusBayar?.status === "Disetujui" ? "#10B981" : "#F59E0B"}40`,
-              color: statusBayar?.status === "Disetujui" ? "#065F46" : "#92400E",
+              background: statusBayar?.status_verifikasi === "Disetujui" ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
+              border: `1px solid ${statusBayar?.status_verifikasi === "Disetujui" ? "#10B981" : "#F59E0B"}40`,
+              color: statusBayar?.status_verifikasi === "Disetujui" ? "#065F46" : "#92400E",
               padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 600,
             }}>
-              {statusBayar?.status === "Disetujui" ? "✓ Iuran Lunas" : "⚠ Iuran Belum Lunas"}
+              {statusBayar?.status_verifikasi === "Disetujui" ? "✓ Iuran Lunas" : "⚠ Iuran Belum Lunas"}
             </div>
             <button style={S.logoutBtn} className="w-btn" onClick={logout}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
@@ -280,11 +280,11 @@ export default function WargaDashboard() {
                     </div>
                   ) : (
                     <div>
-                      <Badge status={pembayaranList[0]?.status} />
+                      <Badge status={pembayaranList[0]?.status_verifikasi} />
                       <p style={{ color: "#888", fontSize: 12, margin: "8px 0 0" }}>
-                        {pembayaranList[0]?.status === "Disetujui"
+                        {pembayaranList[0]?.status_verifikasi === "Disetujui"
                           ? "✓ Iuran Anda sudah terverifikasi."
-                          : pembayaranList[0]?.status === "Pending"
+                          : pembayaranList[0]?.status_verifikasi === "Pending"
                           ? "Menunggu verifikasi dari admin."
                           : "Pembayaran ditolak. Coba bayar lagi."}
                       </p>
@@ -307,7 +307,7 @@ export default function WargaDashboard() {
                           <div style={{ fontSize: 14, fontWeight: 600 }}>{parseJenisAndCatatan(sampahList[0].jenis).jenis}</div>
                           <div style={{ fontSize: 12, color: "#888" }}>{sampahList[0].berat} kg · {fmtDate(sampahList[0].created_at).split(",")[0]}</div>
                         </div>
-                        <Badge status={sampahList[0].status} />
+                        <Badge status={sampahList[0].status_pengangkutan} />
                       </div>
                     </div>
                   )}
@@ -415,11 +415,11 @@ export default function WargaDashboard() {
                           <td style={S.td}>{s.berat} kg</td>
                           <td style={{ ...S.td, color: "#888", maxWidth: 160, fontSize: 12 }}>{parseJenisAndCatatan(s.jenis).catatan || <span style={{ color: "#ddd" }}>—</span>}</td>
                           <td style={{ ...S.td, fontSize: 12, color: "#666" }}>{fmtDate(s.created_at)}</td>
-                          <td style={S.td}><Badge status={s.status} /></td>
+                          <td style={S.td}><Badge status={s.status_pengangkutan} /></td>
                           <td style={S.td}>
                             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                               {["Menunggu", "Diproses", "Selesai"].map((step, idx) => {
-                                const current = ["Menunggu", "Diproses", "Selesai"].indexOf(s.status);
+                                const current = ["Menunggu", "Diproses", "Selesai"].indexOf(s.status_pengangkutan);
                                 const done = idx <= current;
                                 return (
                                   <div key={step} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -481,11 +481,11 @@ export default function WargaDashboard() {
                           <td style={{ ...S.td, color: "#bbb", width: 36 }}>{i + 1}</td>
                           <td style={{ ...S.td, fontWeight: 600, color: "#0F6E56" }}>Rp 50.000</td>
                           <td style={{ ...S.td, fontSize: 12, color: "#666" }}>{fmtDate(p.tanggal)}</td>
-                          <td style={S.td}><Badge status={p.status} /></td>
+                          <td style={S.td}><Badge status={p.status_verifikasi} /></td>
                           <td style={{ ...S.td, fontSize: 12, color: "#888" }}>
-                            {p.status === "Disetujui" && "✓ Admin telah memverifikasi pembayaran Anda"}
-                            {p.status === "Pending"   && "⏳ Sedang diproses oleh admin"}
-                            {p.status === "Ditolak"   && "✕ Ditolak admin, coba bayar kembali"}
+                            {p.status_verifikasi === "Disetujui" && "✓ Admin telah memverifikasi pembayaran Anda"}
+                            {p.status_verifikasi === "Pending"   && "⏳ Sedang diproses oleh admin"}
+                            {p.status_verifikasi === "Ditolak"   && "✕ Ditolak admin, coba bayar kembali"}
                           </td>
                         </tr>
                       ))}

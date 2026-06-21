@@ -93,6 +93,7 @@ export default function Transporter() {
       supabase
         .from("pengangkutan")
         .select("*, warga(id, nama, alamat, no_hp, location)")
+        .eq("transporter_id", id)
         .eq("status", "proses")
         .order("id", { ascending: false }),
 
@@ -100,6 +101,7 @@ export default function Transporter() {
       supabase
         .from("pengangkutan")
         .select("*, warga(id, nama, alamat, location)")
+        .eq("transporter_id", id)
         .eq("status", "selesai")
         .order("id", { ascending: false }),
 
@@ -137,6 +139,7 @@ export default function Transporter() {
       // 2. Insert record pengangkutan
       await supabase.from("pengangkutan").insert({
         warga_id: sampah.warga_id,
+        transporter_id: myId,
         status: "proses",
       });
 
@@ -157,7 +160,8 @@ export default function Transporter() {
       await supabase
         .from("pengangkutan")
         .update({ status: "selesai" })
-        .eq("id", pengangkutan.id);
+        .eq("id", pengangkutan.id)
+        .eq("transporter_id", myId);
 
       // 2. Update sampah → Selesai (semua sampah Diproses dari warga ini)
       await supabase
