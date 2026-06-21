@@ -23,9 +23,15 @@ const STATUS_COLOR = {
   selesai:   { bg: "#D1FAE5", color: "#065F46", border: "#6EE7B7" },
 };
 
+const normalizeTransportStatus = (value) => {
+  if (value === "proses" || value === "Diproses") return "Diproses";
+  if (value === "selesai" || value === "Selesai") return "Selesai";
+  return value;
+};
+
 function Badge({ status }) {
-  const label = status === "proses" ? "Diproses" : status === "selesai" ? "Selesai" : status;
-  const s = STATUS_COLOR[status] || { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" };
+  const label = normalizeTransportStatus(status) || status;
+  const s = STATUS_COLOR[label] || STATUS_COLOR[status] || { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" };
   return (
     <span style={{
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
@@ -94,7 +100,7 @@ export default function Transporter() {
         .from("pengangkutan")
         .select("*, warga(id, nama, alamat, no_hp, location)")
         .eq("transporter_id", id)
-        .eq("status", "proses")
+        .in("status", ["proses", "Diproses"])
         .order("id", { ascending: false }),
 
       // Riwayat selesai saya
@@ -102,7 +108,7 @@ export default function Transporter() {
         .from("pengangkutan")
         .select("*, warga(id, nama, alamat, location)")
         .eq("transporter_id", id)
-        .eq("status", "selesai")
+        .in("status", ["selesai", "Selesai"])
         .order("id", { ascending: false }),
 
       // Semua warga untuk peta

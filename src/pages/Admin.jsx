@@ -24,15 +24,22 @@ const STATUS_COLOR = {
   Selesai:   { bg: "#D1FAE5", color: "#065F46" },
 };
 
+const normalizeStatus = (value) => {
+  if (value === "proses" || value === "Diproses") return "Diproses";
+  if (value === "selesai" || value === "Selesai") return "Selesai";
+  return value;
+};
+
 function Badge({ status }) {
-  const s = STATUS_COLOR[status] || { bg: "#f3f4f6", color: "#374151" };
+  const normalized = normalizeStatus(status);
+  const s = STATUS_COLOR[normalized] || { bg: "#f3f4f6", color: "#374151" };
   return (
     <span style={{
       background: s.bg, color: s.color,
       padding: "3px 10px", borderRadius: 99,
       fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
     }}>
-      {status}
+      {normalized || "-"}
     </span>
   );
 }
@@ -104,18 +111,18 @@ export default function AdminDashboard() {
 
   async function verifikasiPayment(id, status) {
     await supabase.from("pembayaran").update({ status_verifikasi: status }).eq("id", id);
-    fetchData();
+    await fetchData();
   }
 
   async function hapusWarga(id, nama) {
     if (!confirm(`Hapus warga "${nama}" dan semua datanya?`)) return;
     await supabase.from("warga").delete().eq("id", id);
-    fetchData();
+    await fetchData();
   }
 
   async function updateStatusSampah(id, status) {
     await supabase.from("sampah").update({ status_pengangkutan: status }).eq("id", id);
-    fetchData();
+    await fetchData();
   }
 
   async function tambahWarga() {
@@ -130,7 +137,7 @@ export default function AdminDashboard() {
     else {
       setFormWarga({ nama: "", alamat: "", no_hp: "", email: "" });
       setShowAddWarga(false);
-      fetchData();
+      await fetchData();
     }
     setAddingWarga(false);
   }
