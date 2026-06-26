@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 import Admin from "./pages/Admin";
-import Transporter from "./pages/Transporter";
+import Courier from "./pages/Courier";
 import Warga from "./pages/Warga";
 import Login from "./pages/Login";
 
@@ -57,7 +57,7 @@ function App() {
   if (error) return <div style={{ color: 'red', padding: 20 }}>{error} <button onClick={() => window.location.reload()}>Refresh</button></div>;
   if (role === "guest") return <Login />;
   if (role === "admin") return <Admin />;
-  if (role === "transporter") return <Transporter />;
+  if (role === "transporter") return <Courier />;
   if (role === "warga") return <Warga />;
 
   return <Login />; // fallback aman

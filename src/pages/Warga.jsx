@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Map from "../components/Map";
@@ -15,24 +16,27 @@ const parseJenisAndCatatan = (jenisStr) => {
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 
+const getSampahStatus = (item) => item?.status ?? item?.status_pengangkutan ?? "Menunggu";
+
 const JENIS_SAMPAH = ["Organik", "Anorganik / Plastik", "Kertas / Kardus", "Logam / Kaleng", "Kaca / Botol", "B3 (Berbahaya)", "Elektronik", "Lainnya"];
 
 const STATUS_COLOR = {
-  Menunggu:  { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" },
-  Diproses:  { bg: "#FEF3C7", color: "#92400E", border: "#FCD34D" },
-  Selesai:   { bg: "#D1FAE5", color: "#065F46", border: "#6EE7B7" },
-  Pending:   { bg: "#FEF9C3", color: "#854D0E", border: "#FDE68A" },
-  Disetujui: { bg: "#D1FAE5", color: "#065F46", border: "#6EE7B7" },
-  Ditolak:   { bg: "#FEE2E2", color: "#991B1B", border: "#FECACA" },
+  Menunggu:  { bg: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+  Diproses:  { bg: "#e6f7ff", color: "#0958d9", border: "#91caff" },
+  Selesai:   { bg: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
+  Pending:   { bg: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+  Disetujui: { bg: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
+  Ditolak:   { bg: "#fff1f0", color: "#cf1322", border: "#ffa39e" },
 };
 
 function Badge({ status }) {
-  const s = STATUS_COLOR[status] || { bg: "#F3F4F6", color: "#374151", border: "#E5E7EB" };
+  const s = STATUS_COLOR[status] || { bg: "#fff", color: "#888", border: "#ddd" };
   return (
     <span style={{
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-      padding: "3px 10px", borderRadius: 99,
+      padding: "4px 12px", borderRadius: 99,
       fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", display: "inline-block",
+      letterSpacing: "0.2px"
     }}>{status}</span>
   );
 }
@@ -83,21 +87,45 @@ export default function WargaDashboard() {
   }
 
   async function fetchSampah(wargaId) {
-    const { data } = await supabase
-      .from("sampah")
-      .select("*")
-      .eq("warga_id", wargaId)
-      .order("id", { ascending: false });
-    setSampahList(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("sampah")
+        .select("*")
+        .eq("warga_id", wargaId)
+        .order("id", { ascending: false });
+
+      if (error) {
+        console.error("fetchSampah error:", error);
+        setSampahList([]);
+        return;
+      }
+
+      setSampahList((data || []).map((item) => ({ ...item, status: getSampahStatus(item) })));
+    } catch (err) {
+      console.error("fetchSampah exception:", err);
+      setSampahList([]);
+    }
   }
 
   async function fetchPembayaran(wargaId) {
-    const { data } = await supabase
-      .from("pembayaran")
-      .select("*")
-      .eq("warga_id", wargaId)
-      .order("tanggal", { ascending: false });
-    setPembayaranList(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("pembayaran")
+        .select("*")
+        .eq("warga_id", wargaId)
+        .order("id", { ascending: false });
+
+      if (error) {
+        console.error("fetchPembayaran error:", error);
+        setPembayaranList([]);
+        return;
+      }
+
+      setPembayaranList(data || []);
+    } catch (err) {
+      console.error("fetchPembayaran exception:", err);
+      setPembayaranList([]);
+    }
   }
 
   async function refresh() {
@@ -106,68 +134,82 @@ export default function WargaDashboard() {
   }
 
   async function simpanLokasi() {
-    if (!lokasi || !profile) return alert("Klik peta untuk menentukan lokasi!");
-    let lat, lng;
+    if (!lokasi || !profile) return Swal.fire("Klik peta untuk menentukan lokasi!");
+    
+    // Jika lokasi adalah string dari database, berarti user belum mengklik map
     if (typeof lokasi === "string") {
-      const m = lokasi.match(/POINT\(([-\d.]+) ([-\d.]+)\)/i);
-      if (!m) return alert("Format lokasi tidak valid");
-      lng = parseFloat(m[1]); lat = parseFloat(m[2]);
-    } else {
-      lat = lokasi.lat; lng = lokasi.lng;
+      return Swal.fire({ icon: 'info', title: 'Lokasi Tetap', text: 'Anda belum mengubah lokasi pada peta.' });
     }
+    
+    let lat = lokasi.lat;
+    let lng = lokasi.lng;
+    
     await supabase.from("warga").update({ location: `POINT(${lng} ${lat})` }).eq("id", profile.id);
-    alert("✅ Lokasi berhasil disimpan!");
+    Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Lokasi berhasil disimpan!' });
     init();
   }
 
   async function requestPengangkutan() {
-    if (!jenis) return alert("Pilih jenis sampah terlebih dahulu");
-    if (!berat || parseFloat(berat) <= 0) return alert("Masukkan berat yang valid");
+    if (!jenis) return Swal.fire("Pilih jenis sampah terlebih dahulu");
+    if (!berat || parseFloat(berat) <= 0) return Swal.fire("Masukkan berat yang valid");
     if (!profile) return;
 
     setSubmitting(true);
-    const { error } = await supabase.from("sampah").insert({
-      warga_id: profile.id,
-      jenis: catatan ? `${jenis} (${catatan})` : jenis,
-      berat: parseFloat(berat),
-      status_pengangkutan: "Menunggu",
-    });
-    if (error) alert("Gagal mengirim request: " + error.message);
-    else {
-      setJenis(""); setBerat(""); setCatatan("");
-      alert("✅ Request pengangkutan berhasil dikirim!");
-      await fetchSampah(profile.id);
-      setActiveTab("riwayat");
+    try {
+      const payload = {
+        warga_id: profile.id,
+        jenis: catatan ? `${jenis} (${catatan})` : jenis,
+        berat: parseFloat(berat),
+        status: "Menunggu",
+      };
+
+      const { error } = await supabase.from("sampah").insert(payload);
+      if (error) {
+        console.error("insert sampah error:", error);
+        Swal.fire("Gagal mengirim request: " + error.message);
+      } else {
+        setJenis(""); setBerat(""); setCatatan("");
+        Swal.fire("✅ Request pengangkutan berhasil dikirim!");
+        await fetchSampah(profile.id);
+        setActiveTab("riwayat");
+      }
+    } catch (err) {
+      console.error("requestPengangkutan exception:", err);
+      Swal.fire("Gagal mengirim request.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   async function bayarIuran() {
     if (!profile) return;
-    const adaPending = pembayaranList.some(p => p.status_verifikasi === "Pending");
-    if (adaPending) return alert("Masih ada pembayaran yang menunggu verifikasi admin.");
+    const adaPending = pembayaranList.some(p => p.status === "Pending");
+    if (adaPending) return Swal.fire("Masih ada pembayaran yang menunggu verifikasi admin.");
     const { error } = await supabase.from("pembayaran").insert({
-      warga_id: profile.id,
-      status_verifikasi: "Pending",
+  warga_id: profile.id,
+  status: "Pending", 
     });
-    if (error) alert("Gagal: " + error.message);
-    else { alert("✅ Pembayaran diajukan, menunggu verifikasi admin."); await fetchPembayaran(profile.id); }
+    if (error) Swal.fire("Gagal: " + error.message);
+    else { Swal.fire("✅ Pembayaran diajukan, menunggu verifikasi admin."); await fetchPembayaran(profile.id); }
   }
 
   const logout = async () => { await supabase.auth.signOut(); window.location.href = "/"; };
 
   /* Statistik */
   const totalReq   = sampahList.length;
-  const menunggu   = sampahList.filter(s => s.status_pengangkutan === "Menunggu").length;
-  const diproses   = sampahList.filter(s => s.status_pengangkutan === "Diproses").length;
-  const selesai    = sampahList.filter(s => s.status_pengangkutan === "Selesai").length;
-  const statusBayar = pembayaranList.find(p => p.status_verifikasi && p.status_verifikasi !== "Ditolak");
+  const menunggu   = sampahList.filter(s => getSampahStatus(s) === "Menunggu").length;
+  const diproses   = sampahList.filter(s => getSampahStatus(s) === "Diproses").length;
+  const selesai    = sampahList.filter(s => getSampahStatus(s) === "Selesai").length;
+  const statusBayar = pembayaranList.find(p => p.status && p.status !== "Ditolak");
+
+  const totalIuran = pembayaranList.filter(p => p.status === "Disetujui").length * 50000;
 
   const TABS = [
     { key: "beranda",   label: "🏠 Beranda" },
     { key: "request",   label: "📋 Request Sampah" },
     { key: "riwayat",   label: "📜 Riwayat" },
     { key: "pembayaran",label: "💰 Pembayaran" },
+    { key: "laporan",   label: "📈 Laporan Keuangan" },
     { key: "peta",      label: "🗺️ Lokasi Saya" },
   ];
 
@@ -215,45 +257,46 @@ export default function WargaDashboard() {
         .fadeUp { animation: fadeUp 0.3s ease both; }
       `}</style>
 
-      <div style={S.card}>
-        {/* Header */}
-        <div style={S.header}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={S.avatar}>{profile.nama?.[0]?.toUpperCase() || "W"}</div>
-            <div>
-              <h1 style={S.headerTitle}>{profile.nama}</h1>
-              <p style={S.headerSub}>{profile.alamat || "Alamat belum diatur"}</p>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              background: statusBayar?.status_verifikasi === "Disetujui" ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
-              border: `1px solid ${statusBayar?.status_verifikasi === "Disetujui" ? "#10B981" : "#F59E0B"}40`,
-              color: statusBayar?.status_verifikasi === "Disetujui" ? "#065F46" : "#92400E",
-              padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 600,
-            }}>
-              {statusBayar?.status_verifikasi === "Disetujui" ? "✓ Iuran Lunas" : "⚠ Iuran Belum Lunas"}
-            </div>
-            <button style={S.logoutBtn} className="w-btn" onClick={logout}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              Keluar
-            </button>
-          </div>
+      {/* Sidebar */}
+      <div style={S.sidebar}>
+        <div style={S.sidebarHeader}>
+          <div style={S.logoIcon}>W</div>
+          WebGIS Sampah
         </div>
-
-        {/* Tab Bar */}
-        <div style={S.tabBar}>
+        <div style={S.sidebarMenu}>
           {TABS.map(t => (
-            <button key={t.key} className="w-tab"
-              onClick={() => setActiveTab(t.key)}
-              style={{ ...S.tabBtn, ...(activeTab === t.key ? S.tabActive : {}) }}>
+            <button key={t.key}
+              style={activeTab === t.key ? S.sidebarMenuItemActive : S.sidebarMenuItem}
+              onClick={() => setActiveTab(t.key)}>
               {t.label}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div style={S.mainContent}>
+        {/* Top Nav */}
+        <div style={S.topNav}>
+          <div style={S.searchBar}>
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search or type command...
+          </div>
+          <div style={S.profileSection}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#333", lineHeight: 1.1 }}>{profile.nama || "Warga"}</div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{profile.alamat || "Alamat belum diatur"}</div>
+            </div>
+            <div style={S.avatarSmall}>{profile.nama?.[0]?.toUpperCase() || "W"}</div>
+            <button onClick={logout} style={S.btnOutlineSmall}>Logout</button>
+          </div>
+        </div>
 
         {/* Content */}
-        <div style={S.content}>
+        <div style={S.contentWrapper}>
+          <h1 style={S.pageTitle}>{TABS.find(t => t.key === activeTab)?.label?.replace(/[^a-zA-Z\s]/g, '') || "Dashboard"}</h1>
+          
+          <div style={S.content}>
 
           {/* ═══ BERANDA ═══ */}
           {activeTab === "beranda" && (
@@ -280,11 +323,11 @@ export default function WargaDashboard() {
                     </div>
                   ) : (
                     <div>
-                      <Badge status={pembayaranList[0]?.status_verifikasi} />
+                      <Badge status={pembayaranList[0]?.status} />
                       <p style={{ color: "#888", fontSize: 12, margin: "8px 0 0" }}>
-                        {pembayaranList[0]?.status_verifikasi === "Disetujui"
+                        {pembayaranList[0]?.status === "Disetujui"
                           ? "✓ Iuran Anda sudah terverifikasi."
-                          : pembayaranList[0]?.status_verifikasi === "Pending"
+                          : pembayaranList[0]?.status === "Pending"
                           ? "Menunggu verifikasi dari admin."
                           : "Pembayaran ditolak. Coba bayar lagi."}
                       </p>
@@ -307,7 +350,7 @@ export default function WargaDashboard() {
                           <div style={{ fontSize: 14, fontWeight: 600 }}>{parseJenisAndCatatan(sampahList[0].jenis).jenis}</div>
                           <div style={{ fontSize: 12, color: "#888" }}>{sampahList[0].berat} kg · {fmtDate(sampahList[0].created_at).split(",")[0]}</div>
                         </div>
-                        <Badge status={sampahList[0].status_pengangkutan} />
+                        <Badge status={sampahList[0].status} />
                       </div>
                     </div>
                   )}
@@ -334,7 +377,7 @@ export default function WargaDashboard() {
             <div className="fadeUp">
               <h2 style={S.sectionTitle}>Request Pengangkutan Sampah</h2>
               <p style={{ color: "#888", fontSize: 13, marginTop: -6, marginBottom: 22 }}>
-                Isi form di bawah ini untuk meminta pengangkutan sampah. Transporter akan segera memproses permintaan Anda.
+                Isi form di bawah ini untuk meminta pengangkutan sampah. Courier akan segera memproses permintaan Anda.
               </p>
 
               <div style={{ maxWidth: 560, background: "#f8fffe", border: "1.5px solid #d1fae5", borderRadius: 16, padding: "24px 28px" }}>
@@ -363,7 +406,7 @@ export default function WargaDashboard() {
                 {/* Info lokasi */}
                 {!profile.location && (
                   <div style={{ background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 10, padding: "10px 14px", marginBottom: 18, fontSize: 12, color: "#92400E" }}>
-                    ⚠️ <strong>Lokasi belum diatur.</strong> Transporter memerlukan lokasi Anda untuk pengangkutan.
+                    ⚠️ <strong>Lokasi belum diatur.</strong> Courier memerlukan lokasi Anda untuk pengangkutan.
                     <span style={{ cursor: "pointer", textDecoration: "underline", marginLeft: 6 }}
                       onClick={() => setActiveTab("peta")}>Atur sekarang →</span>
                   </div>
@@ -397,7 +440,7 @@ export default function WargaDashboard() {
                 <div style={S.tableWrap}>
                   <table style={S.table}>
                     <thead>
-                      <tr style={{ background: "#f8f8f6" }}>
+                      <tr>
                         <th style={S.th}>No</th>
                         <th style={S.th}>Jenis Sampah</th>
                         <th style={S.th}>Berat</th>
@@ -415,11 +458,11 @@ export default function WargaDashboard() {
                           <td style={S.td}>{s.berat} kg</td>
                           <td style={{ ...S.td, color: "#888", maxWidth: 160, fontSize: 12 }}>{parseJenisAndCatatan(s.jenis).catatan || <span style={{ color: "#ddd" }}>—</span>}</td>
                           <td style={{ ...S.td, fontSize: 12, color: "#666" }}>{fmtDate(s.created_at)}</td>
-                          <td style={S.td}><Badge status={s.status_pengangkutan} /></td>
+                          <td style={S.td}><Badge status={s.status} /></td>
                           <td style={S.td}>
                             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                               {["Menunggu", "Diproses", "Selesai"].map((step, idx) => {
-                                const current = ["Menunggu", "Diproses", "Selesai"].indexOf(s.status_pengangkutan);
+                                const current = ["Menunggu", "Diproses", "Selesai"].indexOf(s.status);
                                 const done = idx <= current;
                                 return (
                                   <div key={step} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -467,25 +510,25 @@ export default function WargaDashboard() {
                 <div style={S.tableWrap}>
                   <table style={S.table}>
                     <thead>
-                      <tr style={{ background: "#f8f8f6" }}>
-                        <th style={S.th}>No</th>
-                        <th style={S.th}>Jumlah</th>
-                        <th style={S.th}>Tanggal</th>
-                        <th style={S.th}>Status Verifikasi</th>
-                        <th style={S.th}>Keterangan</th>
+                      <tr>
+                        <th style={{...S.th, width: 40, textAlign: "center"}}>No</th>
+                        <th style={{...S.th, width: 140}}>Jumlah</th>
+                        <th style={{...S.th, width: 120}}>Tanggal</th>
+                        <th style={{...S.th, width: 120, textAlign: "center"}}>Status</th>
+                        <th style={{...S.th, width: "100%"}}>Keterangan</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pembayaranList.map((p, i) => (
                         <tr key={p.id} className="w-row">
-                          <td style={{ ...S.td, color: "#bbb", width: 36 }}>{i + 1}</td>
-                          <td style={{ ...S.td, fontWeight: 600, color: "#0F6E56" }}>Rp 50.000</td>
-                          <td style={{ ...S.td, fontSize: 12, color: "#666" }}>{fmtDate(p.tanggal)}</td>
-                          <td style={S.td}><Badge status={p.status_verifikasi} /></td>
-                          <td style={{ ...S.td, fontSize: 12, color: "#888" }}>
-                            {p.status_verifikasi === "Disetujui" && "✓ Admin telah memverifikasi pembayaran Anda"}
-                            {p.status_verifikasi === "Pending"   && "⏳ Sedang diproses oleh admin"}
-                            {p.status_verifikasi === "Ditolak"   && "✕ Ditolak admin, coba bayar kembali"}
+                          <td style={{ ...S.td, color: "#bbb", textAlign: "center" }}>{i + 1}</td>
+                          <td style={{ ...S.td, fontWeight: 500, color: "#333" }}>Rp 50.000</td>
+                          <td style={{ ...S.td, fontSize: 13, color: "#666" }}>{fmtDate(p.tanggal)}</td>
+                          <td style={{ ...S.td, textAlign: "center" }}><Badge status={p.status} /></td>
+                          <td style={{ ...S.td, fontSize: 13, color: "#555" }}>
+                            {p.status === "Disetujui" && "✓ Admin telah memverifikasi pembayaran Anda"}
+                            {p.status === "Pending"   && "⏳ Sedang diproses oleh admin"}
+                            {p.status === "Ditolak"   && "✕ Ditolak admin, mohon lakukan pembayaran kembali"}
                           </td>
                         </tr>
                       ))}
@@ -496,12 +539,57 @@ export default function WargaDashboard() {
             </div>
           )}
 
-          {/* ═══ PETA ═══ */}
+          {/* ═══ LAPORAN KEUANGAN ═══ */}
+          {activeTab === "laporan" && (
+            <div className="fadeUp">
+              <h2 style={S.sectionTitle}>Laporan Keuangan Pribadi</h2>
+              <p style={{ color: "#888", fontSize: 13, marginTop: -6, marginBottom: 22 }}>
+                Ringkasan total iuran yang telah kamu bayarkan untuk mendukung pengangkutan sampah (Circular Economy).
+              </p>
+              
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 28 }}>
+                <StatCard icon="💸" label="Total Iuran Dibayar" value={`Rp ${totalIuran.toLocaleString('id-ID')}`} accent="#10B981" sub="Sepanjang waktu" />
+                <StatCard icon="✅" label="Pengangkutan Selesai" value={selesai} accent="#6366F1" sub="Total sampah diangkut" />
+              </div>
+
+              <div style={S.card}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0f0f0" }}>
+                  <h3 style={{ margin: 0, fontSize: 15, color: "#1f2937" }}>Rincian Pengeluaran Iuran</h3>
+                </div>
+                <div style={S.tableWrap}>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>No</th>
+                        <th style={S.th}>Tanggal Bayar</th>
+                        <th style={S.th}>Status</th>
+                        <th style={S.th}>Nominal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pembayaranList.filter(p => p.status === "Disetujui").length === 0 ? (
+                        <tr><td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>Belum ada iuran yang dibayarkan.</td></tr>
+                      ) : (
+                        pembayaranList.filter(p => p.status === "Disetujui").map((p, i) => (
+                          <tr key={p.id} className="w-row">
+                            <td style={{ ...S.td, color: "#bbb", width: 36 }}>{i + 1}</td>
+                            <td style={S.td}>{fmtDate(p.created_at)}</td>
+                            <td style={S.td}><Badge status="Disetujui" /></td>
+                            <td style={{ ...S.td, color: "#EF4444", fontWeight: 700 }}>- Rp 50.000</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === "peta" && (
             <div className="fadeUp">
               <h2 style={S.sectionTitle}>Lokasi Rumah Saya</h2>
               <p style={{ color: "#888", fontSize: 13, marginTop: -6, marginBottom: 16 }}>
-                Klik pada peta untuk menentukan atau mengubah lokasi rumah Anda. Lokasi ini digunakan transporter untuk menjangkau rumah Anda.
+                Klik pada peta untuk menentukan atau mengubah lokasi rumah Anda. Lokasi ini digunakan courier untuk menjangkau rumah Anda.
               </p>
 
               {profile.location && (
@@ -524,6 +612,7 @@ export default function WargaDashboard() {
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
@@ -532,64 +621,29 @@ export default function WargaDashboard() {
 
 /* ─── Styles ─── */
 const S = {
-  page: {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #f0f0ed 0%, #e8f5f1 100%)",
-    fontFamily: "'DM Sans', sans-serif",
-    padding: "24px 16px",
-  },
-  card: {
-    maxWidth: 1100, margin: "0 auto", background: "#fff",
-    borderRadius: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.10)", overflow: "hidden",
-  },
-  header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "20px 28px",
-    background: "linear-gradient(135deg, #0d1f2d 0%, #1a3a2a 100%)",
-  },
-  avatar: {
-    width: 44, height: 44, borderRadius: 12,
-    background: "rgba(29,158,117,0.3)", color: "#fff",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 18, fontWeight: 700,
-  },
-  headerTitle: {
-    fontFamily: "'Playfair Display', serif", fontSize: 18,
-    fontWeight: 500, color: "#fff", margin: 0,
-  },
-  headerSub: { fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "2px 0 0" },
-  logoutBtn: {
-    background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
-    padding: "7px 14px", borderRadius: 99, color: "#fff", cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 500,
-    display: "flex", alignItems: "center", gap: 6,
-  },
-  tabBar: {
-    display: "flex", background: "#0d1f2d",
-    padding: "0 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", overflowX: "auto",
-  },
-  tabBtn: {
-    background: "transparent", border: "none",
-    borderBottomWidth: "2px", borderBottomStyle: "solid", borderBottomColor: "transparent",
-    padding: "12px 16px", color: "rgba(255,255,255,0.45)",
-    fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 500,
-    cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s",
-  },
-  tabActive: { color: "#1D9E75", borderBottomColor: "#1D9E75", background: "rgba(29,158,117,0.08)", fontWeight: 600 },
-  content: { padding: "24px 28px 36px" },
-  sectionTitle: { fontSize: 17, fontWeight: 700, color: "#0d1f2d", margin: "0 0 8px", fontFamily: "'DM Sans', sans-serif" },
-  label: { display: "block", fontSize: 11, fontWeight: 600, color: "#888", marginBottom: 5, letterSpacing: "0.05em", textTransform: "uppercase" },
-  tableWrap: { overflowX: "auto", borderRadius: 12, border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
+  page: { display: "flex", minHeight: "100vh", background: "#f5f7f9", fontFamily: "'DM Sans', sans-serif" },
+  sidebar: { width: 250, background: "#fff", borderRight: "1px solid #f0f0f0", display: "flex", flexDirection: "column" },
+  sidebarHeader: { padding: "24px 24px", fontSize: 17, fontWeight: 700, color: "#1f2937", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #f0f0f0", fontFamily: "'DM Sans', sans-serif" },
+  logoIcon: { width: 28, height: 28, background: "#35b09e", borderRadius: 8, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 },
+  sidebarMenu: { padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4 },
+  sidebarMenuItem: { background: "transparent", border: "none", padding: "12px 16px", color: "#6b7280", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", borderRadius: 8, transition: "all 0.2s" },
+  sidebarMenuItemActive: { background: "#eaf7f5", color: "#35b09e", border: "none", padding: "12px 16px", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", borderRadius: 8 },
+  mainContent: { flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "auto" },
+  topNav: { background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 },
+  searchBar: { display: "flex", alignItems: "center", background: "#f9fafb", padding: "10px 16px", borderRadius: 8, width: 300, border: "1px solid #f0f0f0", color: "#9ca3af", fontSize: 13, gap: 8 },
+  profileSection: { display: "flex", alignItems: "center", gap: 16 },
+  avatarSmall: { width: 36, height: 36, borderRadius: 10, background: "#eaf7f5", color: "#35b09e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 },
+  btnOutlineSmall: { background: "#fff", border: "1px solid #e5e7eb", padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", color: "#4b5563" },
+  contentWrapper: { padding: "32px 40px", maxWidth: 1200, width: "100%", margin: "0 auto" },
+  pageTitle: { fontSize: 22, fontWeight: 600, color: "#111827", margin: "0 0 24px" },
+  card: { background: "#fff", borderRadius: 12, border: "1px solid #f0f0f0", boxShadow: "0 1px 3px rgba(0,0,0,0.01)" },
+  content: { padding: 0 },
+  sectionTitle: { fontSize: 16, fontWeight: 600, color: "#1f2937", margin: "0 0 12px", fontFamily: "'DM Sans', sans-serif" },
+  label: { display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, letterSpacing: "0.02em", textTransform: "uppercase" },
+  tableWrap: { overflowX: "auto", borderRadius: 12, border: "1px solid #f0f0f0", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "11px 12px", fontSize: 12, fontWeight: 600, color: "#555", borderBottom: "1px solid #eee", whiteSpace: "nowrap" },
-  td: { padding: "10px 12px", fontSize: 13, borderBottom: "1px solid #f5f5f5", verticalAlign: "middle" },
-  primaryBtn: {
-    background: "#0F6E56", border: "none", padding: "9px 18px", borderRadius: 99,
-    color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600,
-    cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
-  },
-  outlineBtn: {
-    background: "transparent", border: "1.5px solid #ddd", padding: "9px 18px", borderRadius: 99,
-    color: "#555", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer",
-  },
+  th: { textAlign: "left", padding: "14px 16px", fontSize: 13, fontWeight: 500, color: "#8c8c8c", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", background: "#fafafa" },
+  td: { padding: "16px 16px", fontSize: 14, borderBottom: "1px solid #f0f0f0", verticalAlign: "middle", color: "#333" },
+  primaryBtn: { background: "#35b09e", border: "none", padding: "10px 20px", borderRadius: 8, color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, transition: "background 0.2s" },
+  outlineBtn: { background: "#fff", border: "1px solid #d1d5db", padding: "10px 20px", borderRadius: 8, color: "#374151", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" },
 };

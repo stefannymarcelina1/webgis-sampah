@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Map from "../components/Map";
@@ -15,13 +16,15 @@ const parseJenisAndCatatan = (jenisStr) => {
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "-";
 
+const getSampahStatus = (item) => item?.status ?? item?.status_pengangkutan ?? "Menunggu";
+
 const STATUS_COLOR = {
-  Pending:   { bg: "#FEF3C7", color: "#92400E" },
-  Disetujui: { bg: "#D1FAE5", color: "#065F46" },
-  Ditolak:   { bg: "#FEE2E2", color: "#991B1B" },
-  Menunggu:  { bg: "#E0F2FE", color: "#075985" },
-  Diproses:  { bg: "#EDE9FE", color: "#5B21B6" },
-  Selesai:   { bg: "#D1FAE5", color: "#065F46" },
+  Menunggu:  { bg: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+  Diproses:  { bg: "#e6f7ff", color: "#0958d9", border: "#91caff" },
+  Selesai:   { bg: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
+  Pending:   { bg: "#fffbe6", color: "#d48806", border: "#ffe58f" },
+  Disetujui: { bg: "#f6ffed", color: "#389e0d", border: "#b7eb8f" },
+  Ditolak:   { bg: "#fff1f0", color: "#cf1322", border: "#ffa39e" },
 };
 
 const normalizeStatus = (value) => {
@@ -32,12 +35,13 @@ const normalizeStatus = (value) => {
 
 function Badge({ status }) {
   const normalized = normalizeStatus(status);
-  const s = STATUS_COLOR[normalized] || { bg: "#f3f4f6", color: "#374151" };
+  const s = STATUS_COLOR[normalized] || { bg: "#fff", color: "#888", border: "#ddd" };
   return (
     <span style={{
-      background: s.bg, color: s.color,
-      padding: "3px 10px", borderRadius: 99,
-      fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      padding: "4px 12px", borderRadius: 99,
+      fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", display: "inline-block",
+      letterSpacing: "0.2px"
     }}>
       {normalized || "-"}
     </span>
@@ -94,9 +98,9 @@ export default function AdminDashboard() {
   async function fetchData() {
     setLoading(true);
     const [w, p, s, pg] = await Promise.all([
-      supabase.from("warga").select("*").order("created_at", { ascending: false }),
-      supabase.from("pembayaran").select("*, warga(nama, alamat)").order("created_at", { ascending: false }),
-      supabase.from("sampah").select("*, warga(nama, alamat)").order("created_at", { ascending: false }),
+      supabase.from("warga").select("*").order("id", { ascending: false }),
+      supabase.from("pembayaran").select("*, warga(nama, alamat)").order("id", { ascending: false }),
+      supabase.from("sampah").select("*, warga(nama, alamat)").order("id", { ascending: false }),
       supabase
         .from("pengangkutan")
         .select("*, warga(nama, alamat, location), transporter:profiles!pengangkutan_transporter_id_fkey(id, nama, role)")
@@ -104,13 +108,13 @@ export default function AdminDashboard() {
     ]);
     setWarga(w.data || []);
     setPembayaran(p.data || []);
-    setSampah(s.data || []);
+    setSampah((s.data || []).map((item) => ({ ...item, status: getSampahStatus(item) })));
     setPengangkutan(pg.data || []);
     setLoading(false);
   }
 
   async function verifikasiPayment(id, status) {
-    await supabase.from("pembayaran").update({ status_verifikasi: status }).eq("id", id);
+    await supabase.from("pembayaran").update({ status }).eq("id", id);
     await fetchData();
   }
 
@@ -121,19 +125,22 @@ export default function AdminDashboard() {
   }
 
   async function updateStatusSampah(id, status) {
-    await supabase.from("sampah").update({ status_pengangkutan: status }).eq("id", id);
+    const { error } = await supabase.from("sampah").update({ status }).eq("id", id);
+    if (error) {
+      await supabase.from("sampah").update({ status_pengangkutan: status }).eq("id", id);
+    }
     await fetchData();
   }
 
   async function tambahWarga() {
-    if (!formWarga.nama || !formWarga.alamat) return alert("Nama dan alamat wajib diisi");
+    if (!formWarga.nama || !formWarga.alamat) return Swal.fire("Nama dan alamat wajib diisi");
     setAddingWarga(true);
     const { error } = await supabase.from("warga").insert({
       nama: formWarga.nama,
       alamat: formWarga.alamat,
       no_hp: formWarga.no_hp || null,
     });
-    if (error) alert("Gagal menambah warga: " + error.message);
+    if (error) Swal.fire("Gagal menambah warga: " + error.message);
     else {
       setFormWarga({ nama: "", alamat: "", no_hp: "", email: "" });
       setShowAddWarga(false);
@@ -149,19 +156,24 @@ export default function AdminDashboard() {
 
   /* Statistik */
   const totalWarga     = warga.length;
-  const pending        = pembayaran.filter(p => p.status_verifikasi === "Pending").length;
-  const disetujui      = pembayaran.filter(p => p.status_verifikasi === "Disetujui").length;
-  const sampahAktif    = sampah.filter(s => s.status_pengangkutan === "Menunggu").length;
+  const pending        = pembayaran.filter(p => p.status === "Pending").length;
+  const disetujui      = pembayaran.filter(p => p.status === "Disetujui").length;
+  const sampahAktif    = sampah.filter(s => s.status === "Menunggu").length;
+  
+  const totalPengangkutanSelesai = pengangkutan.filter(p => ["selesai", "Selesai"].includes(p.status)).length;
+  const totalPemasukan = disetujui * 50000;
+  const totalPengeluaran = totalPengangkutanSelesai * 10000;
+  const labaKotor = totalPemasukan - totalPengeluaran;
 
   /* Filter pembayaran */
   const filteredBayar = bayarFilter === "Semua"
     ? pembayaran
-    : pembayaran.filter(p => p.status_verifikasi === bayarFilter);
+    : pembayaran.filter(p => p.status === bayarFilter);
 
   /* Peta data */
   const mapData = warga.map(w => {
     const pay = pembayaran.find(p => p.warga_id === w.id);
-    return { ...w, payment_status: pay?.status_verifikasi === "Disetujui" ? "Sudah Bayar" : "Belum Bayar" };
+    return { ...w, payment_status: pay?.status === "Disetujui" ? "Sudah Bayar" : "Belum Bayar" };
   });
 
   const TABS = [
@@ -169,7 +181,8 @@ export default function AdminDashboard() {
     { key: "pembayaran",   label: "✅ Pembayaran" },
     { key: "sampah",       label: "🗑️ Sampah" },
     { key: "warga",        label: "👥 Warga" },
-    { key: "transporter",  label: "🚛 Transporter" },
+    { key: "transporter",  label: "🚛 Courier" },
+    { key: "laporan",      label: "📈 Laporan Keuangan" },
   ];
 
   return (
@@ -189,40 +202,46 @@ export default function AdminDashboard() {
         .fadeUp { animation: fadeUp 0.35s ease both; }
       `}</style>
 
-      <div style={S.card}>
-        {/* ── Header ── */}
-        <div style={S.header}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={S.logoBox}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </div>
-            <div>
-              <h1 style={S.headerTitle}>Admin Dashboard</h1>
-              <p style={S.headerSub}>Sistem Informasi Pengolahan Sampah</p>
-            </div>
-          </div>
-          <button style={S.logoutBtn} className="adm-btn" onClick={logout}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-            Keluar
-          </button>
+      {/* Sidebar */}
+      <div style={S.sidebar}>
+        <div style={S.sidebarHeader}>
+          <div style={S.logoIcon}>A</div>
+          WebGIS Sampah
         </div>
-
-        {/* ── Tab Bar ── */}
-        <div style={S.tabBar}>
+        <div style={S.sidebarMenu}>
           {TABS.map(t => (
-            <button
-              key={t.key}
-              className="adm-tab-btn"
-              onClick={() => setActiveTab(t.key)}
-              style={{ ...S.tabBtn, ...(activeTab === t.key ? S.tabBtnActive : {}) }}
-            >
+            <button key={t.key}
+              style={activeTab === t.key ? S.sidebarMenuItemActive : S.sidebarMenuItem}
+              onClick={() => setActiveTab(t.key)}>
               {t.label}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* ── Content ── */}
-        <div style={S.content}>
+      {/* Main Content Area */}
+      <div style={S.mainContent}>
+        {/* Top Nav */}
+        <div style={S.topNav}>
+          <div style={S.searchBar}>
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search or type command...
+          </div>
+          <div style={S.profileSection}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#333", lineHeight: 1.1 }}>Admin WebGIS</div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Sistem Informasi Sampah</div>
+            </div>
+            <div style={S.avatarSmall}>A</div>
+            <button onClick={logout} style={S.btnOutlineSmall}>Logout</button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={S.contentWrapper}>
+          <h1 style={S.pageTitle}>{TABS.find(t => t.key === activeTab)?.label?.replace(/[^a-zA-Z\s]/g, '') || "Dashboard"}</h1>
+          
+          <div style={S.content}>
           {loading ? (
             <div style={{ textAlign: "center", padding: 60, color: "#999", fontSize: 15 }}>
               ⏳ Memuat data...
@@ -267,7 +286,7 @@ export default function AdminDashboard() {
                           key={f}
                           className={`adm-filter-btn${bayarFilter === f ? " active" : ""}`}
                           onClick={() => setBayarFilter(f)}
-                        >{f} {f === "Semua" ? `(${pembayaran.length})` : `(${pembayaran.filter(p => p.status_verifikasi === f).length})`}</button>
+                        >{f} {f === "Semua" ? `(${pembayaran.length})` : `(${pembayaran.filter(p => p.status === f).length})`}</button>
                       ))}
                     </div>
                   </div>
@@ -277,7 +296,7 @@ export default function AdminDashboard() {
                     <div style={S.tableWrap}>
                       <table style={S.table}>
                         <thead>
-                          <tr style={{ background: "#f8f8f6" }}>
+                          <tr>
                             <th style={S.th}>No</th>
                             <th style={S.th}>Nama Warga</th>
                             <th style={S.th}>Alamat</th>
@@ -293,11 +312,11 @@ export default function AdminDashboard() {
                               <td style={{ ...S.td, color: "#aaa", width: 36 }}>{i + 1}</td>
                               <td style={{ ...S.td, fontWeight: 500 }}>{p.warga?.nama || "-"}</td>
                               <td style={{ ...S.td, color: "#666", maxWidth: 160 }}>{p.warga?.alamat || "-"}</td>
-                              <td style={{ ...S.td, fontWeight: 600, color: "#0F6E56" }}>Rp {fmt(p.jumlah)}</td>
-                              <td style={S.td}>{fmtDate(p.created_at)}</td>
-                              <td style={S.td}><Badge status={p.status_verifikasi} /></td>
+                              <td style={{ ...S.td, fontWeight: 500, color: "#333" }}>Rp {fmt(p.jumlah || 50000)}</td>
+                              <td style={S.td}>{fmtDate(p.tanggal || p.created_at)}</td>
+                              <td style={S.td}><Badge status={p.status} /></td>
                               <td style={S.td}>
-                                {p.status_verifikasi === "Pending" ? (
+                                {p.status === "Pending" ? (
                                   <div style={{ display: "flex", gap: 6 }}>
                                     <ActionBtn color="#10B981" onClick={() => verifikasiPayment(p.id, "Disetujui")}>✓ Setujui</ActionBtn>
                                     <ActionBtn color="#EF4444" onClick={() => verifikasiPayment(p.id, "Ditolak")}>✕ Tolak</ActionBtn>
@@ -325,7 +344,7 @@ export default function AdminDashboard() {
                     <div style={S.tableWrap}>
                       <table style={S.table}>
                         <thead>
-                          <tr style={{ background: "#f8f8f6" }}>
+                          <tr>
                             <th style={S.th}>No</th>
                             <th style={S.th}>Nama Warga</th>
                             <th style={S.th}>Alamat</th>
@@ -353,18 +372,18 @@ export default function AdminDashboard() {
                                 <td style={{ ...S.td, fontWeight: 600 }}>{s.berat} kg</td>
                                 <td style={{ ...S.td, color: "#888", maxWidth: 160, fontSize: 12 }}>{info.catatan || <span style={{ color: "#ddd" }}>—</span>}</td>
                                 <td style={S.td}>{fmtDate(s.created_at)}</td>
-                                <td style={S.td}><Badge status={s.status_pengangkutan} /></td>
+                                <td style={S.td}><Badge status={s.status} /></td>
                               <td style={S.td}>
                                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                                  {s.status_pengangkutan === "Menunggu" && (
-                                    <ActionBtn color="#6366F1" onClick={() => updateStatusSampah(s.id, "Diproses")}>▶ Proses</ActionBtn>
-                                  )}
-                                  {s.status_pengangkutan === "Diproses" && (
-                                    <ActionBtn color="#10B981" onClick={() => updateStatusSampah(s.id, "Selesai")}>✓ Selesai</ActionBtn>
-                                  )}
-                                  {s.status_pengangkutan === "Selesai" && (
-                                    <span style={{ color: "#bbb", fontSize: 12 }}>Selesai</span>
-                                  )}
+                                  {s.status === "Menunggu" && (
+                                  <ActionBtn color="#6366F1" onClick={() => updateStatusSampah(s.id, "Diproses")}>▶ Proses</ActionBtn>
+                                )}
+                                {s.status === "Diproses" && (
+                                  <ActionBtn color="#10B981" onClick={() => updateStatusSampah(s.id, "Selesai")}>✓ Selesai</ActionBtn>
+                                )}
+                                {s.status === "Selesai" && (
+                                  <span style={{ color: "#bbb", fontSize: 12 }}>Selesai</span>
+                                )}
                                 </div>
                               </td>
                             </tr>
@@ -425,7 +444,7 @@ export default function AdminDashboard() {
                     <div style={S.tableWrap}>
                       <table style={S.table}>
                         <thead>
-                          <tr style={{ background: "#f8f8f6" }}>
+                          <tr>
                             <th style={S.th}>No</th>
                             <th style={S.th}>Nama</th>
                             <th style={S.th}>Alamat</th>
@@ -472,11 +491,11 @@ export default function AdminDashboard() {
                     <div style={S.tableWrap}>
                       <table style={S.table}>
                         <thead>
-                          <tr style={{ background: "#f8f8f6" }}>
+                          <tr>
                             <th style={S.th}>No</th>
                             <th style={S.th}>Nama Warga</th>
                             <th style={S.th}>Alamat</th>
-                            <th style={S.th}>Transporter</th>
+                            <th style={S.th}>Courier</th>
                             <th style={S.th}>Lokasi</th>
                             <th style={S.th}>Status</th>
                             <th style={S.th}>Tanggal</th>
@@ -510,8 +529,60 @@ export default function AdminDashboard() {
                   )}
                 </div>
               )}
+              {/* ══════════ TAB: LAPORAN KEUANGAN ══════════ */}
+              {activeTab === "laporan" && (
+                <div className="fadeUp">
+                  <h2 style={S.sectionTitle}>Laporan Keuangan (Circular Economy)</h2>
+                  <p style={{ color: "#888", fontSize: 13, marginTop: -6, marginBottom: 22 }}>
+                    Ringkasan sirkulasi keuangan dari iuran Warga dan komisi untuk Courier.
+                  </p>
+                  
+                  <div style={S.statsRow}>
+                    <StatCard icon="💵" label="Pemasukan (Iuran)" value={`Rp ${totalPemasukan.toLocaleString('id-ID')}`} sub={`${disetujui} pembayaran disetujui`} accent="#10B981" />
+                    <StatCard icon="💸" label="Pengeluaran (Komisi)" value={`Rp ${totalPengeluaran.toLocaleString('id-ID')}`} sub={`${totalPengangkutanSelesai} tugas selesai`} accent="#EF4444" />
+                    <StatCard icon="⚖️" label="Saldo Tersisa" value={`Rp ${labaKotor.toLocaleString('id-ID')}`} sub="Laba kotor sistem" accent="#6366F1" />
+                  </div>
+
+                  <div style={S.card}>
+                    <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0f0f0" }}>
+                      <h3 style={{ margin: 0, fontSize: 15, color: "#1f2937" }}>Detail Aliran Dana</h3>
+                    </div>
+                    <div style={S.tableWrap}>
+                      <table style={S.table}>
+                        <thead>
+                          <tr>
+                            <th style={S.th}>Keterangan</th>
+                            <th style={S.th}>Volume</th>
+                            <th style={S.th}>Nominal per Unit</th>
+                            <th style={S.th}>Total (Rp)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="adm-row">
+                            <td style={S.td}>Iuran Bulanan Warga</td>
+                            <td style={S.td}>{disetujui} transaksi</td>
+                            <td style={S.td}>+ Rp 50.000</td>
+                            <td style={{ ...S.td, color: "#10B981", fontWeight: 700 }}>+ Rp {totalPemasukan.toLocaleString('id-ID')}</td>
+                          </tr>
+                          <tr className="adm-row">
+                            <td style={S.td}>Komisi Pengangkutan Courier</td>
+                            <td style={S.td}>{totalPengangkutanSelesai} tugas</td>
+                            <td style={S.td}>- Rp 10.000</td>
+                            <td style={{ ...S.td, color: "#EF4444", fontWeight: 700 }}>- Rp {totalPengeluaran.toLocaleString('id-ID')}</td>
+                          </tr>
+                          <tr className="adm-row" style={{ backgroundColor: "#f8fafc" }}>
+                            <td colSpan="3" style={{ ...S.td, fontWeight: 600, textAlign: "right" }}>Total Saldo (Laba Kotor):</td>
+                            <td style={{ ...S.td, fontWeight: 700, fontSize: 16 }}>Rp {labaKotor.toLocaleString('id-ID')}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
+          </div>
         </div>
       </div>
     </div>
@@ -544,142 +615,31 @@ function Empty({ text }) {
 
 /* ─────────────────────────── STYLES ─────────────────────────── */
 const S = {
-  page: {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #f0f0ed 0%, #e8f5f1 100%)",
-    fontFamily: "'DM Sans', sans-serif",
-    padding: "24px 16px",
-  },
-  card: {
-    maxWidth: 1300,
-    margin: "0 auto",
-    background: "#fff",
-    borderRadius: 24,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.10)",
-    overflow: "hidden",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "22px 28px",
-    background: "linear-gradient(135deg, #0d1f2d 0%, #1a3a2a 100%)",
-  },
-  logoBox: {
-    width: 44, height: 44, borderRadius: 12,
-    background: "rgba(29,158,117,0.25)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  headerTitle: {
-    fontFamily: "'Playfair Display', serif",
-    fontSize: 20, fontWeight: 500, color: "#fff", margin: 0,
-  },
-  headerSub: {
-    fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "2px 0 0",
-  },
-  logoutBtn: {
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.2)",
-    padding: "8px 16px", borderRadius: 99,
-    color: "#fff", cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 500,
-    display: "flex", alignItems: "center", gap: 6,
-    transition: "all 0.2s",
-  },
-  tabBar: {
-    display: "flex",
-    background: "#0d1f2d",
-    padding: "0 20px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-    overflowX: "auto",
-  },
-  tabBtn: {
-    background: "transparent",
-    border: "none",
-    borderBottomWidth: "2px",
-    borderBottomStyle: "solid",
-    borderBottomColor: "transparent",
-    padding: "13px 18px",
-    color: "rgba(255,255,255,0.45)",
-    fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 500,
-    cursor: "pointer", whiteSpace: "nowrap",
-    transition: "all 0.2s",
-    borderRadius: "8px 8px 0 0",
-  },
-  tabBtnActive: {
-    color: "#1D9E75",
-    borderBottomColor: "#1D9E75",
-    background: "rgba(29,158,117,0.08)",
-    fontWeight: 600,
-  },
-  content: {
-    padding: "28px 28px 36px",
-    minHeight: 400,
-  },
-  statsRow: {
-    display: "flex",
-    gap: 16,
-    flexWrap: "wrap",
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 17, fontWeight: 700,
-    color: "#0d1f2d", margin: "0 0 4px",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  tableWrap: {
-    overflowX: "auto",
-    borderRadius: 12,
-    border: "1px solid #eee",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left",
-    padding: "11px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#555",
-    borderBottom: "1px solid #eee",
-    whiteSpace: "nowrap",
-  },
-  td: {
-    padding: "10px 12px",
-    fontSize: 13,
-    borderBottom: "1px solid #f5f5f5",
-    verticalAlign: "middle",
-  },
-  formCard: {
-    background: "#f8fffe",
-    border: "1.5px solid #d1fae5",
-    borderRadius: 14,
-    padding: "20px 22px",
-    marginBottom: 20,
-  },
-  label: {
-    display: "block",
-    fontSize: 11, fontWeight: 600,
-    color: "#888", marginBottom: 5,
-    letterSpacing: "0.05em", textTransform: "uppercase",
-  },
-  primaryBtn: {
-    background: "#0F6E56",
-    border: "none", padding: "9px 18px",
-    borderRadius: 99, color: "#fff",
-    fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 600,
-    cursor: "pointer", transition: "all 0.2s",
-  },
-  ghostBtn: {
-    background: "transparent",
-    border: "1.5px solid #ddd",
-    padding: "9px 18px", borderRadius: 99,
-    color: "#555", fontFamily: "'DM Sans', sans-serif",
-    fontSize: 13, fontWeight: 500, cursor: "pointer",
-  },
+  page: { display: "flex", minHeight: "100vh", background: "#f5f7f9", fontFamily: "'DM Sans', sans-serif" },
+  sidebar: { width: 250, background: "#fff", borderRight: "1px solid #f0f0f0", display: "flex", flexDirection: "column" },
+  sidebarHeader: { padding: "24px 24px", fontSize: 17, fontWeight: 700, color: "#1f2937", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #f0f0f0", fontFamily: "'DM Sans', sans-serif" },
+  logoIcon: { width: 28, height: 28, background: "#35b09e", borderRadius: 8, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 },
+  sidebarMenu: { padding: "16px 12px", display: "flex", flexDirection: "column", gap: 4 },
+  sidebarMenuItem: { background: "transparent", border: "none", padding: "12px 16px", color: "#6b7280", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", borderRadius: 8, transition: "all 0.2s" },
+  sidebarMenuItemActive: { background: "#eaf7f5", color: "#35b09e", border: "none", padding: "12px 16px", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", borderRadius: 8 },
+  mainContent: { flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "auto" },
+  topNav: { background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 },
+  searchBar: { display: "flex", alignItems: "center", background: "#f9fafb", padding: "10px 16px", borderRadius: 8, width: 300, border: "1px solid #f0f0f0", color: "#9ca3af", fontSize: 13, gap: 8 },
+  profileSection: { display: "flex", alignItems: "center", gap: 16 },
+  avatarSmall: { width: 36, height: 36, borderRadius: 10, background: "#eaf7f5", color: "#35b09e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 },
+  btnOutlineSmall: { background: "#fff", border: "1px solid #e5e7eb", padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", color: "#4b5563" },
+  contentWrapper: { padding: "32px 40px", maxWidth: 1200, width: "100%", margin: "0 auto" },
+  pageTitle: { fontSize: 22, fontWeight: 600, color: "#111827", margin: "0 0 24px" },
+  card: { background: "#fff", borderRadius: 12, border: "1px solid #f0f0f0", boxShadow: "0 1px 3px rgba(0,0,0,0.01)" },
+  content: { padding: 0 },
+  sectionTitle: { fontSize: 16, fontWeight: 600, color: "#1f2937", margin: "0 0 12px", fontFamily: "'DM Sans', sans-serif" },
+  label: { display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, letterSpacing: "0.02em", textTransform: "uppercase" },
+  tableWrap: { overflowX: "auto", borderRadius: 12, border: "1px solid #f0f0f0", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "14px 16px", fontSize: 13, fontWeight: 500, color: "#8c8c8c", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", background: "#fafafa" },
+  td: { padding: "16px 16px", fontSize: 14, borderBottom: "1px solid #f0f0f0", verticalAlign: "middle", color: "#333" },
+  primaryBtn: { background: "#35b09e", border: "none", padding: "10px 20px", borderRadius: 8, color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, transition: "background 0.2s" },
+  ghostBtn: { background: "#fff", border: "1px solid #d1d5db", padding: "10px 20px", borderRadius: 8, color: "#374151", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  statsRow: { display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 },
+  formCard: { background: "#f8f9fa", border: "1px solid #eee", borderRadius: 12, padding: "24px", marginBottom: 24 },
 };

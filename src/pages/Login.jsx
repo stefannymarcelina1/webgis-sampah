@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Link, useNavigate } from "react-router-dom";
@@ -9,184 +10,154 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-const login = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    alert(`Login gagal: ${error.message}`);
-    console.error(error);
-  } else {
-    console.log("Login berhasil", data);
-    navigate("/");
-  }
-  setLoading(false);
-};
+  const login = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Login Gagal',
+        text: error.message,
+        confirmButtonColor: '#35b09e'
+      });
+      console.error(error);
+    } else {
+      console.log("Login berhasil", data);
+      navigate("/");
+    }
+    setLoading(false);
+  };
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
-        {/* Left Panel */}
+      {/* Decorative Yellow Circle */}
+      <div style={styles.yellowCircle} />
+      
+      {/* Decorative Red/Coral Triangle */}
+      <div style={styles.redTriangle} />
+
+      <div style={styles.card} className="auth-card">
+        {/* Left Panel (Teal Accent Panel) */}
         <div style={styles.leftPanel}>
-          <div style={styles.leftTop}>
-            <div style={styles.logoMark}>
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <rect width="28" height="28" rx="8" fill="rgba(255,255,255,0.12)" />
-                <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                <circle cx="14" cy="18" r="3" fill="white" />
-              </svg>
-            </div>
-            <h1 style={styles.leftTitle}>Sistem Informasi<br />Pengolahan Sampah</h1>
-            <div style={styles.accentLine} />
+          <div style={styles.logoContainer}>
+            <span style={styles.logoIcon}>♻️</span>
+            <span style={styles.logoText}>WebGIS Sampah</span>
           </div>
-          <div style={styles.leftBottom}>
-            <p style={styles.leftTagline}>
-              Kelola laporan, pelayanan, dan informasi pengolahan sampah npmwarga dalam satu platform terpadu.
+          
+          <div style={styles.leftContent}>
+            <h1 style={styles.leftTitle}>Hello, Friend!</h1>
+            <p style={styles.leftSubtext}>
+              Masukkan detail pribadi Anda dan mulailah perjalanan bersama kami untuk lingkungan yang lebih bersih.
             </p>
-            <div style={styles.dotsRow}>
-              <div style={{ ...styles.dot, ...styles.dotActive }} />
-              <div style={styles.dot} />
-              <div style={styles.dot} />
-            </div>
+            <Link to="/register" style={styles.outlineBtn}>
+              DAFTAR
+            </Link>
           </div>
-          {/* decorative circles */}
-          <div style={styles.circle1} />
-          <div style={styles.circle2} />
+          
+          {/* Subtle background graphics in the left panel */}
+          <div style={styles.leftBgCircle1} />
+          <div style={styles.leftBgCircle2} />
         </div>
 
-        {/* Right Panel */}
+        {/* Right Panel (Form Panel) */}
         <div style={styles.rightPanel}>
-          <div style={styles.tabRow}>
-            <button style={{ ...styles.tab, ...styles.tabActive }}>Masuk</button>
-            <Link to="/register" style={{ ...styles.tab, textDecoration: "none" }}>Daftar</Link>
+          <h2 style={styles.formTitle}>Masuk Akun</h2>
+          
+          {/* Social Logins */}
+          <div style={styles.socialRow}>
+            <button type="button" style={styles.socialIcon} onClick={() => Swal.fire({ text: 'Login Facebook belum tersedia', confirmButtonColor: '#35b09e' })}>f</button>
+            <button type="button" style={styles.socialIcon} onClick={() => Swal.fire({ text: 'Login Google belum tersedia', confirmButtonColor: '#35b09e' })}>G+</button>
+            <button type="button" style={styles.socialIcon} onClick={() => Swal.fire({ text: 'Login LinkedIn belum tersedia', confirmButtonColor: '#35b09e' })}>in</button>
           </div>
-
-          <h2 style={styles.formTitle}>Selamat datang</h2>
-          <p style={styles.formSub}>Masuk untuk melanjutkan ke akun Anda.</p>
+          
+          <p style={styles.formSubtext}>atau gunakan email akun Anda:</p>
 
           <form onSubmit={login} style={styles.form}>
-            {/* Email */}
-            <div style={styles.field}>
-              <label style={styles.label}>Alamat Email</label>
+            {/* Email Field */}
+            <div style={styles.inputGroup}>
+              <span style={styles.fieldIcon}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </span>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@email.com"
+                placeholder="Email"
                 style={styles.input}
-                onFocus={(e) => Object.assign(e.target.style, styles.inputFocus)}
-                onBlur={(e) => Object.assign(e.target.style, styles.input)}
               />
             </div>
 
-            {/* Password */}
-            <div style={styles.field}>
-              <label style={styles.label}>Kata Sandi</label>
-              <div style={styles.pwdWrap}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan kata sandi"
-                  style={{ ...styles.input, paddingRight: 42 }}
-                  onFocus={(e) => Object.assign(e.target.style, { ...styles.inputFocus, paddingRight: "42px" })}
-                  onBlur={(e) => Object.assign(e.target.style, { ...styles.input, paddingRight: "42px" })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={styles.eyeBtn}
-                  aria-label="Toggle password"
-                >
-                  {showPassword ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
-                      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+            {/* Password Field */}
+            <div style={styles.inputGroup}>
+              <span style={styles.fieldIcon}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </span>
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                style={styles.input}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={styles.eyeBtn}
+                aria-label="Toggle password"
+              >
+                {showPassword ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
             </div>
 
             {/* Forgot password */}
-            <div style={{ textAlign: "right", marginTop: -8, marginBottom: 20 }}>
-              <a href="#" style={styles.forgotLink}>Lupa kata sandi?</a>
+            <div style={{ textAlign: "center", margin: "8px 0 20px" }}>
+              <a href="#" style={styles.forgotLink} onClick={(e) => { e.preventDefault(); Swal.fire({ text: 'Silakan hubungi administrator untuk mereset kata sandi Anda.', confirmButtonColor: '#35b09e' }); }}>Lupa kata sandi Anda?</a>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }}
-              onMouseEnter={(e) => !loading && (e.target.style.background = "#1D9E75")}
-              onMouseLeave={(e) => !loading && (e.target.style.background = "#0F6E56")}
+              style={{ ...styles.btnPrimary, opacity: loading ? 0.8 : 1 }}
+              onMouseEnter={(e) => !loading && (e.target.style.background = "#2d9989")}
+              onMouseLeave={(e) => !loading && (e.target.style.background = "#35b09e")}
             >
-              {loading ? (
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}>
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round" />
-                  </svg>
-                  Memproses...
-                </span>
-              ) : "Masuk"}
-            </button>
-
-            <div style={styles.divider}>
-              <span style={styles.dividerLine} />
-              <span style={styles.dividerText}>atau</span>
-              <span style={styles.dividerLine} />
-            </div>
-
-            <button
-              type="button"
-              style={styles.btnAlt}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f3")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              <GoogleIcon />
-              Masuk dengan Google
+              {loading ? "MEMPROSES..." : "MASUK"}
             </button>
           </form>
-
-          <p style={styles.switchText}>
-            Belum punya akun?{" "}
-            <Link to="/register" style={styles.switchLink}>Daftar sekarang</Link>
-          </p>
         </div>
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
         * { box-sizing: border-box; }
-        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(16px); }
+          from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        body { margin: 0; font-family: 'DM Sans', sans-serif; }
-        input::placeholder { color: #aaa; }
-        input:focus { outline: none; }
-        .auth-card { animation: fadeUp 0.5s ease both; }
+        body { margin: 0; font-family: 'Outfit', sans-serif; background: #f0f3f2; }
+        .auth-card { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
       `}</style>
     </div>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.253 17.64 11.945 17.64 9.2z" fill="#4285F4" />
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
-      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335" />
-    </svg>
   );
 }
 
@@ -196,243 +167,230 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#f0f0ed",
+    background: "#f0f3f2",
     padding: "24px 16px",
-    fontFamily: "'DM Sans', sans-serif",
+    fontFamily: "'Outfit', sans-serif",
+    position: "relative",
+    overflow: "hidden",
+  },
+  yellowCircle: {
+    position: "absolute",
+    bottom: "-10%",
+    left: "-5%",
+    width: "350px",
+    height: "350px",
+    borderRadius: "50%",
+    background: "#f9d342",
+    opacity: 0.8,
+    zIndex: 0,
+  },
+  redTriangle: {
+    position: "absolute",
+    top: "-5%",
+    right: "-5%",
+    width: "0",
+    height: "0",
+    borderStyle: "solid",
+    borderWidth: "0 280px 280px 0",
+    borderColor: "transparent #e85a71 transparent transparent",
+    opacity: 0.9,
+    zIndex: 0,
   },
   card: {
     display: "flex",
     width: "100%",
-    maxWidth: 860,
-    minHeight: 560,
-    borderRadius: 20,
+    maxWidth: 850,
+    minHeight: 520,
+    borderRadius: 24,
     overflow: "hidden",
-    boxShadow: "0 24px 64px rgba(0,0,0,0.12)",
-    animation: "fadeUp 0.5s ease both",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.08)",
+    backgroundColor: "#ffffff",
+    zIndex: 2,
   },
   leftPanel: {
-    width: 260,
-    flexShrink: 0,
-    background: "#0d1f2d",
-    padding: "44px 32px",
+    width: "38%",
+    background: "#35b09e",
+    color: "#ffffff",
+    padding: "40px 30px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
     position: "relative",
     overflow: "hidden",
   },
-  leftTop: { position: "relative", zIndex: 2 },
-  logoMark: { marginBottom: 20 },
-  leftTitle: {
-    fontFamily: "'Playfair Display', serif",
-    color: "#fff",
-    fontSize: 22,
-    lineHeight: 1.4,
-    fontWeight: 400,
-    margin: 0,
+  logoContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    zIndex: 2,
   },
-  accentLine: {
-    width: 36,
-    height: 3,
-    background: "#1D9E75",
-    borderRadius: 2,
-    marginTop: 14,
+  logoIcon: {
+    fontSize: 24,
   },
-  leftBottom: { position: "relative", zIndex: 2 },
-  leftTagline: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 12,
-    lineHeight: 1.7,
-    margin: "0 0 16px",
+  logoText: {
+    fontSize: 18,
+    fontWeight: 700,
+    letterSpacing: "0.5px",
   },
-  dotsRow: { display: "flex", gap: 6 },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    background: "rgba(255,255,255,0.2)",
-  },
-  dotActive: { background: "#1D9E75" },
-  circle1: {
-    position: "absolute",
-    top: -80,
-    right: -80,
-    width: 240,
-    height: 240,
-    borderRadius: "50%",
-    background: "rgba(29,158,117,0.15)",
-    zIndex: 1,
-  },
-  circle2: {
-    position: "absolute",
-    bottom: -60,
-    left: -60,
-    width: 180,
-    height: 180,
-    borderRadius: "50%",
-    background: "rgba(29,158,117,0.08)",
-    zIndex: 1,
-  },
-  rightPanel: {
-    flex: 1,
-    background: "#fff",
-    padding: "44px 48px",
+  leftContent: {
     display: "flex",
     flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    margin: "auto 0",
+    zIndex: 2,
   },
-  tabRow: {
-    display: "flex",
-    gap: 0,
-    borderBottom: "0.5px solid #e5e5e3",
-    marginBottom: 32,
+  leftTitle: {
+    fontSize: 32,
+    fontWeight: 700,
+    margin: "0 0 16px 0",
+    color: "#ffffff",
   },
-  tab: {
-    background: "none",
-    border: "none",
-    borderBottomWidth: "2px",
-    borderBottomStyle: "solid",
-    borderBottomColor: "transparent",
-    marginBottom: -0.5,
-    padding: "0 0 14px",
-    marginRight: 28,
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
-    color: "#888",
+  leftSubtext: {
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: "rgba(255, 255, 255, 0.85)",
+    marginBottom: 30,
+    maxWidth: "240px",
+  },
+  outlineBtn: {
+    background: "transparent",
+    border: "2px solid #ffffff",
+    borderRadius: 30,
+    color: "#ffffff",
+    padding: "10px 32px",
+    fontSize: 12,
+    fontWeight: 700,
+    textDecoration: "none",
+    letterSpacing: "1px",
+    transition: "all 0.2s",
     cursor: "pointer",
-    fontWeight: 400,
+    boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
   },
-  tabActive: {
-    color: "#111",
-    fontWeight: 500,
-    borderBottomColor: "#1D9E75",
+  leftBgCircle1: {
+    position: "absolute",
+    top: "10%",
+    right: "-10%",
+    width: "120px",
+    height: "120px",
+    borderRadius: "50%",
+    background: "rgba(255, 255, 255, 0.08)",
+    transform: "rotate(45deg)",
+  },
+  leftBgCircle2: {
+    position: "absolute",
+    bottom: "10%",
+    left: "-10%",
+    width: "100px",
+    height: "100px",
+    borderRadius: "50%",
+    background: "rgba(255, 255, 255, 0.05)",
+  },
+  rightPanel: {
+    width: "62%",
+    background: "#ffffff",
+    padding: "50px 60px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
   },
   formTitle: {
-    fontFamily: "'Playfair Display', serif",
-    fontSize: 26,
-    fontWeight: 400,
-    color: "#111",
-    margin: "0 0 6px",
+    fontSize: 32,
+    fontWeight: 700,
+    color: "#35b09e",
+    margin: "0 0 16px 0",
   },
-  formSub: {
-    fontSize: 13,
-    color: "#888",
-    margin: "0 0 28px",
-    lineHeight: 1.5,
-  },
-  form: { display: "flex", flexDirection: "column" },
-  field: { marginBottom: 16 },
-  label: {
-    display: "block",
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#888",
-    marginBottom: 6,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-  },
-  input: {
-    width: "100%",
-    padding: "11px 14px",
-    border: "0.5px solid #ddd",
-    borderRadius: 10,
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
-    color: "#111",
-    background: "#fafaf8",
-    transition: "border-color 0.2s, box-shadow 0.2s",
-    boxSizing: "border-box",
-    outline: "none",
-  },
-  inputFocus: {
-    width: "100%",
-    padding: "11px 14px",
-    border: "0.5px solid #1D9E75",
-    borderRadius: 10,
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
-    color: "#111",
-    background: "#fff",
-    boxShadow: "0 0 0 3px rgba(29,158,117,0.12)",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  pwdWrap: { position: "relative" },
-  eyeBtn: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "#aaa",
+  socialRow: {
     display: "flex",
-    alignItems: "center",
-    padding: 0,
-  },
-  forgotLink: {
-    fontSize: 12,
-    color: "#1D9E75",
-    textDecoration: "none",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  btnPrimary: {
-    width: "100%",
-    padding: 13,
-    background: "#0F6E56",
-    border: "none",
-    borderRadius: 10,
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
-    fontWeight: 500,
-    color: "#fff",
-    cursor: "pointer",
-    transition: "background 0.2s",
-    letterSpacing: "0.02em",
-  },
-  divider: {
-    display: "flex",
-    alignItems: "center",
+    justifyContent: "center",
     gap: 12,
-    margin: "20px 0",
+    marginBottom: 20,
   },
-  dividerLine: {
-    flex: 1,
-    height: 0.5,
-    background: "#e5e5e3",
-    display: "block",
-  },
-  dividerText: {
-    fontSize: 12,
-    color: "#bbb",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  btnAlt: {
-    width: "100%",
-    padding: 11,
-    background: "transparent",
-    border: "0.5px solid #ddd",
-    borderRadius: 10,
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
+  socialIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: "50%",
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
     color: "#333",
-    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 600,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    transition: "background 0.2s",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    outline: "none",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
   },
-  switchText: {
-    textAlign: "center",
-    marginTop: 20,
+  formSubtext: {
+    fontSize: 12,
+    color: "#718096",
+    marginBottom: 20,
+  },
+  form: {
+    width: "100%",
+    maxWidth: 320,
+    display: "flex",
+    flexDirection: "column",
+  },
+  inputGroup: {
+    display: "flex",
+    alignItems: "center",
+    background: "#f4f8f7",
+    borderRadius: 8,
+    marginBottom: 12,
+    padding: "4px 14px",
+    position: "relative",
+  },
+  fieldIcon: {
+    display: "flex",
+    alignItems: "center",
+    marginRight: 10,
+    color: "#a0aec0",
+  },
+  input: {
+    width: "100%",
+    padding: "10px 0",
+    border: "none",
+    background: "transparent",
+    outline: "none",
     fontSize: 13,
-    color: "#888",
-    fontFamily: "'DM Sans', sans-serif",
+    color: "#2d3748",
+    fontFamily: "'Outfit', sans-serif",
   },
-  switchLink: {
-    color: "#1D9E75",
-    fontWeight: 500,
+  eyeBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    color: "#a0aec0",
+    marginLeft: 6,
+  },
+  forgotLink: {
+    fontSize: 12,
+    color: "#4a5568",
     textDecoration: "none",
+    borderBottom: "1px solid #e2e8f0",
+    paddingBottom: 2,
+    display: "inline-block",
+  },
+  btnPrimary: {
+    background: "#35b09e",
+    border: "none",
+    borderRadius: 30,
+    color: "#ffffff",
+    padding: "12px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+    transition: "background 0.2s",
+    boxShadow: "0 4px 15px rgba(53, 176, 158, 0.3)",
+    letterSpacing: "1px",
+    width: "100%",
+    outline: "none",
   },
 };

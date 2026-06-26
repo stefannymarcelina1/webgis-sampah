@@ -48,6 +48,18 @@ export const parseLocation = (loc) => {
   
   // Handle string format POINT(lng lat)
   if (typeof loc === "string") {
+    // 1. EWKB Hex string from PostGIS (contoh: 0101000020E6100000...)
+    if (loc.length === 50 && loc.startsWith("0101000020E6100000")) {
+      const lngHex = loc.slice(18, 34);
+      const latHex = loc.slice(34, 50);
+      const lngBytes = new Uint8Array(lngHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+      const latBytes = new Uint8Array(latHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+      const lng = new DataView(lngBytes.buffer).getFloat64(0, true);
+      const lat = new DataView(latBytes.buffer).getFloat64(0, true);
+      return { lat, lng };
+    }
+
+    // 2. Format standar POINT(lng lat)
     const match = loc.match(/POINT\(([-\d.]+) ([-\d.]+)\)/i);
     if (match) {
       const lng = parseFloat(match[1]);
